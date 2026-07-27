@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="en">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Sparky's Water Rescue</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Alegreya:ital,wght@0,400;0,700;1,400&amp;family=Fraunces:wght@700;900&amp;display=swap" rel="stylesheet">
+  <style>
+        * { box-sizing: border-box; }
+        body { 
+            font-family: 'Alegreya', serif; 
+            background-color: #170c24; 
+            background-image: radial-gradient(circle at 50% 20%, #2a1543 0%, #170c24 80%);
+            min-height: 100vh; margin: 0; padding: 20px;
+            display: flex; justify-content: center; align-items: center;
+            perspective: 2000px; overflow-x: hidden;
+        }
+        
+        /* Kitap Sahnesi (Flat 2D Flipbook) */
+        .book-stage {
+            max-width: 800px; width: 100%; position: relative; z-index: 10;
+        }
+
+        /* Sayfa Geçiş Animasyonları (Kart Çevirme) */
+        .scene { 
+            display: none; position: relative;
+            transform-style: preserve-3d;
+        }
+        .scene.active { 
+            display: block; animation-duration: 0.9s; 
+            animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1); animation-fill-mode: forwards;
+        }
+        
+        /* İleri Çevirme (Sağdan Sola Kart Çevirme) */
+        .scene.active.forward {
+            animation-name: flipForward;
+            transform-origin: left center;
+        }
+        @keyframes flipForward {
+            0% { transform: rotateY(90deg); opacity: 0.5; box-shadow: -20px 0 30px rgba(0,0,0,0.4); }
+            50% { opacity: 1; }
+            100% { transform: rotateY(0deg); opacity: 1; box-shadow: 0 0 0 rgba(0,0,0,0); }
+        }
+
+        /* Geri Çevirme (Soldan Sağa Kart Çevirme) */
+        .scene.active.backward {
+            animation-name: flipBackward;
+            transform-origin: right center;
+        }
+        @keyframes flipBackward {
+            0% { transform: rotateY(-90deg); opacity: 0.5; box-shadow: 20px 0 30px rgba(0,0,0,0.4); }
+            50% { opacity: 1; }
+            100% { transform: rotateY(0deg); opacity: 1; box-shadow: 0 0 0 rgba(0,0,0,0); }
+        }
+
+        /* Kitap Sayfası Tasarımı (Retro Sci-Fi Teması) */
+        .book-page {
+            background-color: #fcf8f3; /* Sıcak krem rengi */
+            background-image: url("data:image/svg+xml,%3Csvg width='40' height='40' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='20' cy='20' r='1' fill='%23d4c5b0' opacity='0.4'/%3E%3C/svg%3E");
+            color: #2b1e36; /* Koyu mor yazı */
+            border-radius: 12px;
+            position: relative; overflow: hidden; padding: 50px 50px 90px 50px; z-index: 10;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+            border: 2px solid #e8dccd;
+        }
+
+        /* Sol Cilt (Retro Turuncu) */
+        .book-spine {
+            position: absolute; left: 0; top: 0; bottom: 0; width: 10px;
+            background: #ff7b00; z-index: 5;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.2);
+        }
+
+        .story-img { 
+            border: 4px solid #2b1e36; border-radius: 8px; box-shadow: 6px 6px 0px #ff7b00; 
+            position: relative; z-index: 2;
+        }
+        
+        h1, h2 { font-family: 'Fraunces', serif; color: #2b1e36; letter-spacing: 1px; position: relative; z-index: 2; }
+
+        .story-content > p:first-of-type::first-letter {
+            font-size: 3.5rem; float: left; line-height: 0.8; margin: 5px 8px 0 0;
+            font-family: 'Fraunces', serif; color: #ff7b00; font-weight: 700;
+        }
+
+        .story-content { position: relative; z-index: 2; }
+        .story-content p { margin-bottom: 1.2rem; line-height: 1.8; text-align: justify; }
+        
+        /* Buton Renkleri */
+        .choice-btn {
+            display: block; width: 100%; background: #2b1e36; color: #fcf8f3;
+            font-family: 'Fraunces', serif; font-size: 1.1rem; padding: 12px; margin: 10px 0;
+            border: 2px solid #2b1e36; border-radius: 8px; cursor: pointer; transition: 0.2s; 
+            text-align: center; position: relative; z-index: 2;
+        }
+        .choice-btn:hover { background: #ff7b00; border-color: #ff7b00; transform: translateY(-2px); }
+        .btn-try { background: #d63031; border-color: #d63031; } .btn-try:hover { background: #c0392b; border-color: #c0392b; }
+        .btn-end { background: #00b89c; border-color: #00b89c; } .btn-end:hover { background: #00a385; border-color: #00a385; }
+
+        .page-number { position: absolute; bottom: 25px; left: 50%; transform: translateX(-50%); font-family: 'Fraunces', serif; color: #ff7b00; font-size: 14px; font-weight: bold; z-index: 20; }
+
+        /* Sayfa Kıvrımları (Mint Yeşili Köşeler) */
+        .page-corner {
+            position: absolute; bottom: 0; width: 60px; height: 60px; cursor: pointer; transition: all 0.3s ease; z-index: 20;
+        }
+        .page-corner-right {
+            right: 0; background: linear-gradient(135deg, transparent 50%, #00b89c 50%); border-radius: 0 0 12px 0;
+        }
+        .page-corner-right:hover { background: linear-gradient(135deg, transparent 50%, #00a385 50%); width: 80px; height: 80px; }
+        .page-corner-left {
+            left: 0; background: linear-gradient(225deg, transparent 50%, #00b89c 50%); border-radius: 0 0 0 12px;
+        }
+        .page-corner-left:hover { background: linear-gradient(225deg, transparent 50%, #00a385 50%); width: 80px; height: 80px; }
+        .page-corner::after { content: '❯'; position: absolute; bottom: 15px; right: 15px; font-size: 16px; color: #fcf8f3; font-weight: bold; }
+        .page-corner-left::after { content: '❮'; right: auto; left: 15px; }
+
+        .replay-btn {
+            position: absolute; bottom: 20px; right: 20px; background: #00b89c; color: #fcf8f3; padding: 8px 16px;
+            border-radius: 8px; font-family: 'Fraunces', serif; font-size: 14px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+            transition: all 0.3s ease; z-index: 20; display: flex; align-items: center; gap: 6px; border: none;
+        }
+        .replay-btn:hover { background: #00a385; transform: translateY(-2px); }
+
+        .kunye-box { margin-top: 40px; padding: 15px; background-color: #fff8e1; border: 2px solid #ff7b00; border-radius: 8px; font-size: 16px; color: #2b1e36; text-align: center; font-family: 'Fraunces', serif; font-weight: bold; position: relative; z-index: 2; }
+
+        @media (max-width: 1024px) { body { padding: 20px 10px; align-items: flex-start; } .book-page { padding: 40px 35px 80px 35px; } }
+        @media (max-width: 768px) { body { padding: 10px; } .book-page { padding: 30px 20px 70px 25px; } h1 { font-size: 2.5rem; } h2 { font-size: 2rem; } .story-content { font-size: 1.1rem; } .story-content > p:first-of-type::first-letter { font-size: 2.8rem; } .kunye-box { font-size: 14px; padding: 15px; } .replay-btn { font-size: 12px; padding: 6px 12px; bottom: 15px; right: 15px; } .story-img { border-width: 3px; box-shadow: 4px 4px 0px #ff7b00; } }
+    </style>
+ </head>
+ <body>
+  <main class="book-stage">
+
+   <!-- SAYFA 1 -->
+   <div id="page1" class="scene active forward">
+    <div class="book-page">
+     <div class="book-spine"></div>
+     <h1 class="text-center mb-8 text-5xl md:text-6xl">Sparky's Water Rescue</h1>
+     <img src="1.jpg" alt="Sparky and dog at lake" class="story-img w-full max-w-xl mx-auto rounded-xl mb-8 object-contain">
+     <div class="story-content text-xl">
+      <p>Sparky and his friend, a little brown dog, are playing near the Big Lake. The dog chases a blue butterfly. He jumps onto a wooden raft. Snap! The rope breaks. The raft floats away! The dog is stuck.</p>
+      <button class="choice-btn" onclick="goTo('page2', 'forward')">If Sparky swims out to the raft, go to PAGE 2</button>
+      <button class="choice-btn" onclick="goTo('page3', 'forward')">If Sparky runs to Dr. Vic for help, go to PAGE 3</button>
+     </div>
+     <div class="kunye-box"><p>Developed by Sinan</p></div>
+     <div class="page-number">1 / 10</div>
+     <div class="page-corner page-corner-right" onclick="goTo('page2', 'forward')"></div>
+    </div>
+   </div>
+
+   <!-- SAYFA 2 -->
+   <div id="page2" class="scene">
+    <div class="book-page">
+     <div class="book-spine"></div>
+     <h2 class="text-center mb-8 text-4xl">The Short Circuit (Try Again)</h2>
+     <img src="2.jpg" alt="Sparky in water" class="story-img w-full max-w-xl mx-auto rounded-xl mb-8 object-contain">
+     <div class="story-content text-xl">
+      <p>Sparky jumps into the water. Splash! But water and robots do not mix. BZZZZT! Sparky freezes up. The dog looks scared. Dr. Vic runs out with a net and pulls Sparky back to shore. "You need a water shield, Sparky!" he says. Let's try again.</p>
+      <button class="choice-btn btn-try" onclick="goTo('page1', 'backward')">Turn back to PAGE 1 and choose again</button>
+     </div>
+     <div class="page-number">2 / 10</div>
+     <div class="page-corner page-corner-left" onclick="goTo('page1', 'backward')"></div>
+     <div class="page-corner page-corner-right" onclick="goTo('page1', 'backward')"></div>
+    </div>
+   </div>
+
+   <!-- SAYFA 3 -->
+   <div id="page3" class="scene">
+    <div class="book-page">
+     <div class="book-spine"></div>
+     <h2 class="text-center mb-8 text-4xl">The Aqua-Shield</h2>
+     <img src="3.jpg" alt="Dr Vic in lab" class="story-img w-full max-w-xl mx-auto rounded-xl mb-8 object-contain">
+     <div class="story-content text-xl">
+      <p>Sparky runs to the lab. "Dr. Vic! The dog is on the water. Can you make me safe from water?" Dr. Vic smiles. "Yes! I can build the Aqua-Shield. But it needs a Blue Crystal from the Dry Caves. Go find one!" Sparky runs to the caves.</p>
+      <button class="choice-btn" onclick="goTo('page4', 'forward')">If Sparky goes into the Wet Tunnel, go to PAGE 4</button>
+      <button class="choice-btn" onclick="goTo('page5', 'forward')">If Sparky goes into the Rocky Tunnel, go to PAGE 5</button>
+     </div>
+     <div class="page-number">3 / 10</div>
+     <div class="page-corner page-corner-left" onclick="goTo('page1', 'backward')"></div>
+     <div class="page-corner page-corner-right" onclick="goTo('page4', 'forward')"></div>
+    </div>
+   </div>
+
+   <!-- SAYFA 4 -->
+   <div id="page4" class="scene">
+    <div class="book-page">
+     <div class="book-spine"></div>
+     <h2 class="text-center mb-8 text-4xl">The Drip, Drip, Drip (Try Again)</h2>
+     <img src="4.jpg" alt="Wet tunnel" class="story-img w-full max-w-xl mx-auto rounded-xl mb-8 object-contain">
+     <div class="story-content text-xl">
+      <p>Sparky goes into the Wet Tunnel. Drip, drip! Water falls from the ceiling. It gets into Sparky's neck bolts. Zap, zap! His gears get rusty. Clank! He has to roll back to the lab for oil. Let's try again.</p>
+      <button class="choice-btn btn-try" onclick="goTo('page3', 'backward')">Turn back to PAGE 3 and choose again</button>
+     </div>
+     <div class="page-number">4 / 10</div>
+     <div class="page-corner page-corner-left" onclick="goTo('page3', 'backward')"></div>
+     <div class="page-corner page-corner-right" onclick="goTo('page3', 'backward')"></div>
+    </div>
+   </div>
+
+   <!-- SAYFA 5 -->
+   <div id="page5" class="scene">
+    <div class="book-page">
+     <div class="book-spine"></div>
+     <h2 class="text-center mb-8 text-4xl">The Sleepy Bear</h2>
+     <img src="5.jpg" alt="Sleepy bear and crystal" class="story-img w-full max-w-xl mx-auto rounded-xl mb-8 object-contain">
+     <div class="story-content text-xl">
+      <p>Sparky goes into the Rocky Tunnel. It is dry. He sees the Blue Crystal! But a big, brown bear is sleeping right next to it. Sparky has to get the crystal without waking the bear.</p>
+      <button class="choice-btn" onclick="goTo('page6', 'forward')">If Sparky tip-toes to the crystal, go to PAGE 6</button>
+      <button class="choice-btn" onclick="goTo('page7', 'forward')">If Sparky yells to wake the bear up, go to PAGE 7</button>
+     </div>
+     <div class="page-number">5 / 10</div>
+     <div class="page-corner page-corner-left" onclick="goTo('page3', 'backward')"></div>
+     <div class="page-corner page-corner-right" onclick="goTo('page6', 'forward')"></div>
+    </div>
+   </div>
+
+   <!-- SAYFA 6 -->
+   <div id="page6" class="scene">
+    <div class="book-page">
+     <div class="book-spine"></div>
+     <h2 class="text-center mb-8 text-4xl">The Crystal is Ours!</h2>
+     <img src="6.jpg" alt="Sparky gets crystal" class="story-img w-full max-w-xl mx-auto rounded-xl mb-8 object-contain">
+     <div class="story-content text-xl">
+      <p>Sparky lifts his big metal feet. Tip, toe, tip, toe. He is very quiet. He picks up the Blue Crystal. The bear snores, but does not wake up. Sparky sneaks out of the cave! He runs back to the lab.</p>
+      <button class="choice-btn" onclick="goTo('page8', 'forward')">To go back to Dr. Vic, go to PAGE 8</button>
+     </div>
+     <div class="page-number">6 / 10</div>
+     <div class="page-corner page-corner-left" onclick="goTo('page5', 'backward')"></div>
+     <div class="page-corner page-corner-right" onclick="goTo('page8', 'forward')"></div>
+    </div>
+   </div>
+
+   <!-- SAYFA 7 -->
+   <div id="page7" class="scene">
+    <div class="book-page">
+     <div class="book-spine"></div>
+     <h2 class="text-center mb-8 text-4xl">The Loud Roar (Try Again)</h2>
+     <img src="7.jpg" alt="Grumpy bear" class="story-img w-full max-w-xl mx-auto rounded-xl mb-8 object-contain">
+     <div class="story-content text-xl">
+      <p>Sparky yells, "Wake up, bear!" The bear wakes up. He is very grumpy. Roar! The bear chases Sparky out of the cave. Sparky runs away fast. He did not get the crystal. Let's try again.</p>
+      <button class="choice-btn btn-try" onclick="goTo('page5', 'backward')">Turn back to PAGE 5 and choose again</button>
+     </div>
+     <div class="page-number">7 / 10</div>
+     <div class="page-corner page-corner-left" onclick="goTo('page5', 'backward')"></div>
+     <div class="page-corner page-corner-right" onclick="goTo('page5', 'backward')"></div>
+    </div>
+   </div>
+
+   <!-- SAYFA 8 -->
+   <div id="page8" class="scene">
+    <div class="book-page">
+     <div class="book-spine"></div>
+     <h2 class="text-center mb-8 text-4xl">The Waterproof Robot</h2>
+     <img src="8.jpg" alt="Sparky getting shield" class="story-img w-full max-w-xl mx-auto rounded-xl mb-8 object-contain">
+     <div class="story-content text-xl">
+      <p>Sparky gives the Blue Crystal to Dr. Vic. Dr. Vic puts it in Sparky's chest. Click! The Aqua-Shield turns on. Sparky's metal body glows soft blue. "You are waterproof now!" says Dr. Vic. Sparky runs back to the lake. The raft is far away.</p>
+      <button class="choice-btn" onclick="goTo('page9', 'forward')">If Sparky swims underwater, go to PAGE 9</button>
+      <button class="choice-btn" onclick="goTo('page10', 'forward')">If Sparky uses a fan-boat, go to PAGE 10</button>
+     </div>
+     <div class="page-number">8 / 10</div>
+     <div class="page-corner page-corner-left" onclick="goTo('page6', 'backward')"></div>
+     <div class="page-corner page-corner-right" onclick="goTo('page9', 'forward')"></div>
+    </div>
+   </div>
+
+   <!-- SAYFA 9 (Ending 1) -->
+   <div id="page9" class="scene">
+    <div class="book-page">
+     <div class="book-spine"></div>
+     <h2 class="text-center mb-8 text-4xl">The Underwater Path (Ending 1)</h2>
+     <img src="9.jpg" alt="Sparky swimming" class="story-img w-full max-w-xl mx-auto rounded-xl mb-8 object-contain">
+     <div class="story-content text-xl">
+      <p>Sparky dives into the lake. Glub, glub. The water does not hurt him! He swims under the raft. He uses his strong robot arms to push the raft all the way back to the shore. The dog is safe! Sparky is a hero!</p>
+      <button class="choice-btn btn-end" onclick="goTo('page1', 'forward')">THE END. You saved the dog! Read Again.</button>
+     </div>
+     <div class="kunye-box"><p>Developed by Sinan</p></div>
+     <div class="page-number">9 / 10</div>
+     <div class="page-corner page-corner-left" onclick="goTo('page8', 'backward')"></div>
+     <div class="replay-btn" onclick="goTo('page1', 'forward')">Start Over 🔁</div>
+    </div>
+   </div>
+
+   <!-- SAYFA 10 (Ending 2) -->
+   <div id="page10" class="scene">
+    <div class="book-page">
+     <div class="book-spine"></div>
+     <h2 class="text-center mb-8 text-4xl">The Fan-Boat (Ending 2)</h2>
+     <img src="10.jpg" alt="Sparky on fan boat" class="story-img w-full max-w-xl mx-auto rounded-xl mb-8 object-contain">
+     <div class="story-content text-xl">
+      <p>Sparky finds a small boat with a fan. He turns on his eye-light to see in the dark water. He drives the fan-boat very fast. Vroom! He reaches the raft. The dog jumps into the boat. They drive back to shore. Sparky is a hero!</p>
+      <button class="choice-btn btn-end" onclick="goTo('page1', 'forward')">THE END. You saved the dog! Read Again.</button>
+     </div>
+     <div class="kunye-box"><p>Developed by Sinan</p></div>
+     <div class="page-number">10 / 10</div>
+     <div class="page-corner page-corner-left" onclick="goTo('page8', 'backward')"></div>
+     <div class="replay-btn" onclick="goTo('page1', 'forward')">Start Over 🔁</div>
+    </div>
+   </div>
+
+  </main>
+
+  <script>
+    function goTo(pageId, direction) {
+        var scenes = document.querySelectorAll('.scene');
+        scenes.forEach(function(s) {
+            s.classList.remove('active', 'forward', 'backward');
+        });
+        var target = document.getElementById(pageId);
+        target.classList.add('active');
+        target.classList.add(direction);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  </script>
+ </body>
+</html>
